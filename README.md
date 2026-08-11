@@ -13,7 +13,7 @@ As of January 2020 compatibility with previous versions is broken, as the projec
 
 # building
 
-Must be built with a compiler that accepts the c++14 standard.
+Must be built with a compiler that accepts the c++17 standard.
 
 Requires gcc 7.5 or newer. With 7.5 versions requires the stdc++fs library to be added to the linker.
 
@@ -25,5 +25,4 @@ Uses rapidjson, from Tencent, licensed under the MIT license.
 
 ## TODO
 
-- Test all functionality in the test directory.
 - Properly document the use of the more complicated tools (like the menu).

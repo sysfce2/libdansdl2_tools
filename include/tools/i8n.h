@@ -135,21 +135,47 @@ class i8n {
 		char 			comment;
 	};
 
-	//!Class constructor with path, default language and list of files.
+	//!Class constructor with root path, default language and list of files. 
+	//!Assumes that all files given are located under their respective
+	//!languages in the root path!languages in the root path..
 							i8n(const std::string&, const std::string&, const std::vector<std::string>&);
-	//!Class constructor with path and default language.
+	//!Class constructor with root path and default language.
 							i8n(const std::string&, const std::string&);
 
 	//!Adds the given file to the database. Will throw on failure to
 	//!or if no path/language has been set (along with parser and lexer
 	//!errors. Calling add will trigger a recompilation of all texts, so
-	//!the preferred way adding texts is by doing so in the constructor.
-	void					add_file(const std::string&);
+	//!the preferred way adding texts is by doing so in the constructor. If no
+	//!recompilation if wanted the second parameter can be set to false.
+	void					add_file(const std::string&, bool=true);
+
+	//!Same as add_file, but uses a list of paths. If the second parameter is
+	//!true a recompilation of texts will take place after the last path in
+	//!the list has been processed.
+	void					add_files(const std::vector<std::string>&, bool=true);
+
+	//!Like add_file, but points to a path that is not under the root described
+	//!in this class, for example, an user provided path that can be anywhere
+	//!into the filesystem represented by the second argument. These must 
+	//!respect the conventions for this class, meaning that valid arguments
+	//!for this method would be "myfile.i8n", "path/to/mydir", but my_dir
+	//!would have to be followed by the language string, thus files would
+	//!be in path/to/mydir/en/myfile.i8n.
+	void					add_user_file(const std::string&, const std::string&, bool=true);
+
+	//!Triggers a recompilation of all texts, which includes solving 
+	//!substitutions of embeds and variables. This only makes sense when 
+	//!add_file/add_files has been called with the second parameter set to false.
+	void                    build();
 
 	//!Adds a permanent substitution.
 	void					set(const substitution&);
 
 	//!Sets the root of the files in the filesystem. Will reload the database of texts.
+	//!The root directory is the one under which the subdirectories representing
+	//!languages for the application is, which assumes a centralized directory
+	//!where all these can be found. The add_user_file method can be used to
+	//!point to files anywhere else.
 	void					set_root(const std::string&);
 
 	//!Sets the current language key. Will reload the database of texts
@@ -182,6 +208,14 @@ class i8n {
 	void					set_delimiters(const delimiters&);
 
 	private:
+
+	//!Represents a path there text lives, which can under be under its language
+	//!in the root directory or somewhere else (e.g, an user provided path).
+	struct path_structure {
+
+		std::string path,
+		            root{""}; //empty always unless this is a user provided path!
+	};
 
 	//!Files are resolved to entries (one entry per data item). Each entry is
 	//!composed by segments, which represent a fixed test or a variable to be resolved.
@@ -285,7 +319,7 @@ class i8n {
 											language;	//<!Language string, must be a subdirectory of the file_path.
 
 	std::vector<substitution>				substitutions;	//<!Permanent substitutions.
-	std::vector<std::string>				paths;			//<!List of currently added paths.
+	std::vector<path_structure>             paths;			//<!List of currently added paths.
 	std::map<std::string, codex_entry>		codex;	//<!All data.
 	codex_entry								fail_entry;
 
@@ -295,7 +329,7 @@ class i8n {
 	//!Reloads all entries.
 	void					reload_codex();
 	//!Internally adds a file, does not trigger recompilation.
-	void					lexicalize_file(const std::string&, std::map<std::string, std::vector<lexer::token>>&);
+	void					lexicalize_file(const path_structure&, std::map<std::string, std::vector<lexer::token>>&);
 	//!Compiles the lexer tokens into the codex entries.
 	void					build_entries(std::map<std::string, std::vector<lexer::token>>&);
 	//!Creates the default error entry.

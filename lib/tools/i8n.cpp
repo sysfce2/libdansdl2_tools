@@ -14,7 +14,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Exceptions
 
-tools::i8n_exception::i8n_exception(const std::string& _err)
+tools::i8n_exception::i8n_exception(
+	const std::string& _err
+)
 	:std::runtime_error(_err) {
 
 }
@@ -80,21 +82,30 @@ tools::i8n_parser_error::i8n_parser_error(const std::string _err)
 // Main
 
 //!Class constructor with path and default language.
-tools::i8n::i8n(const std::string& _path, const std::string& _lan, const std::vector<std::string>& _input)
-	:file_path(_path), language(_lan) {
+tools::i8n::i8n(
+	const std::string& _path, 
+	const std::string& _lan, 
+	const std::vector<std::string>& _input
+)
+:file_path(_path), language(_lan) {
 
 	create_default_error_entry();
 
-	std::map<std::string, std::vector<lexer::token>>	lexer_tokens;
-	for(const auto& _i : _input) {
-		paths.push_back(_i);
-		lexicalize_file(_i, lexer_tokens);
+	if(_input.size()) {
+
+		for(const auto& _i : _input) {
+			paths.push_back({_i});
+		}
+
+		reload_codex();
 	}
-	build_entries(lexer_tokens);
 }
 
 //!Class constructor with path and default language.
-tools::i8n::i8n(const std::string& _path, const std::string& _lan)
+tools::i8n::i8n(
+	const std::string& _path, 
+	const std::string& _lan
+)
 	:file_path(_path), language(_lan) {
 
 	create_default_error_entry();
@@ -111,7 +122,10 @@ void tools::i8n::create_default_error_entry() {
 		+delimiter_set.close_value);
 }
 
-void tools::i8n::add_file(const std::string& _path) {
+void tools::i8n::add_file(
+	const std::string& _path,
+	bool _rebuild
+) {
 
 	if(!_path.size()) {
 		throw i8n_exception_no_path{};
@@ -121,20 +135,86 @@ void tools::i8n::add_file(const std::string& _path) {
 		throw i8n_exception_no_language{};
 	}
 
-	if(std::end(paths)!=std::find(std::begin(paths), std::end(paths), _path)) {
-		throw i8n_repeated_path{_path};
+	for(const auto& path : paths) {
+
+		if(path.path==_path) {
+
+			throw i8n_repeated_path{_path};
+		}
 	}
 
 	//This is added in the public interface: the private interface may do its own
 	//calls that might interfere with this.
-	paths.push_back(_path);
+	paths.push_back({_path});
+
+	if(_rebuild) {
+
+		reload_codex();
+	}
+}
+
+void tools::i8n::add_user_file(
+	const std::string& _path,
+	const std::string& _root,
+	bool _rebuild
+) {
+
+	if(!_path.size()) {
+		throw i8n_exception_no_path{};
+	}
+
+	if(!language.size()) {
+		throw i8n_exception_no_language{};
+	}
+
+	for(const auto& path : paths) {
+
+		if(path.path==_path) {
+
+			throw i8n_repeated_path{_path};
+		}
+	}
+
+	//This is added in the public interface: the private interface may do its own
+	//calls that might interfere with this.
+	paths.push_back({_path, _root});
+
+	if(_rebuild) {
+
+		reload_codex();
+	}
+}
+
+void tools::i8n::add_files(
+	const std::vector<std::string>& _paths,
+	bool _rebuild
+) {
+
+	for(const auto& path : _paths) {
+
+		add_file(path, false);
+	}
+
+	if(_rebuild) {
+
+		reload_codex();
+	}
+}
+
+void tools::i8n::build() {
 
 	reload_codex();
 }
 
-void tools::i8n::lexicalize_file(const std::string& _path, std::map<std::string, std::vector<lexer::token>>& _lexer_tokens) {
+void tools::i8n::lexicalize_file(
+	const path_structure& _path, 
+	std::map<std::string, std::vector<lexer::token>>& _lexer_tokens
+) {
 
-	const std::string path=file_path+"/"+language+"/"+_path;
+	const std::string path=0==_path.root.size() 
+		? file_path+"/"+language+"/"+_path.path
+		: _path.root+"/"+language+"/"+_path.path;
+
 	std::ifstream file(path);
 
 	if(!file) {
@@ -142,10 +222,12 @@ void tools::i8n::lexicalize_file(const std::string& _path, std::map<std::string,
 	}
 
 	lexer lx{delimiter_set};
-	_lexer_tokens[_path]=lx.from_file(path);
+	_lexer_tokens[_path.path]=lx.from_file(path);
 }
 
-void tools::i8n::set(const substitution& _sub) {
+void tools::i8n::set(
+	const substitution& _sub
+) {
 
 	auto it=std::find_if(
 		std::begin(substitutions), 
@@ -163,19 +245,25 @@ void tools::i8n::set(const substitution& _sub) {
 	}
 }
 
-void tools::i8n::set_root(const std::string& _path) {
+void tools::i8n::set_root(
+	const std::string& _path
+) {
 
 	file_path=_path;
 	reload_codex();
 }
 
-void tools::i8n::set_language(const std::string& _lan) {
+void tools::i8n::set_language(
+	const std::string& _lan
+) {
 
 	language=_lan;
 	reload_codex();
 }
 
-std::string tools::i8n::get(const std::string& _get) const {
+std::string tools::i8n::get(
+	const std::string& _get
+) const {
 
 	if(!codex.count(_get)) {
 		return fail_string(_get);
@@ -184,7 +272,10 @@ std::string tools::i8n::get(const std::string& _get) const {
 	return codex.at(_get).get(substitutions);
 }
 
-std::string tools::i8n::get(const std::string& _get, const std::vector<substitution>& _subs) const {
+std::string tools::i8n::get(
+	const std::string& _get, 
+	const std::vector<substitution>& _subs
+) const {
 
 	if(!codex.count(_get)) {
 		return fail_string(_get);
@@ -198,7 +289,9 @@ tools::i8n::delimiters tools::i8n::get_delimiters() const {
 	return delimiter_set;
 }
 
-void tools::i8n::set_delimiters(const tools::i8n::delimiters& _delim) {
+void tools::i8n::set_delimiters(
+	const tools::i8n::delimiters& _delim
+) {
 
 	//Sanity check: are all delimiters the correct size?
 	std::vector<std::string> del{
@@ -219,12 +312,16 @@ void tools::i8n::set_delimiters(const tools::i8n::delimiters& _delim) {
 	delimiter_set=_delim;
 }
 
-std::string tools::i8n::fail_string(const std::string& _get) const {
+std::string tools::i8n::fail_string(
+	const std::string& _get
+) const {
 
 	return fail_entry.get({{"__key__", _get}});
 }
 
-void tools::i8n::build_entries(std::map<std::string, std::vector<lexer::token>>& _lexer_tokens) {
+void tools::i8n::build_entries(
+	std::map<std::string, std::vector<lexer::token>>& _lexer_tokens
+) {
 
 	parser pr;
 	codex=pr.parse(_lexer_tokens);
@@ -241,7 +338,9 @@ void tools::i8n::reload_codex() {
 	build_entries(lexer_tokens);
 }
 
-void tools::i8n::set_fail_entry(const std::string& _str) {
+void tools::i8n::set_fail_entry(
+	const std::string& _str
+) {
 
 	try {
 		lexer lx{delimiter_set};
@@ -256,12 +355,16 @@ void tools::i8n::set_fail_entry(const std::string& _str) {
 ////////////////////////////////////////////////////////////////////////////////
 // Lexer.
 
-tools::i8n::lexer::lexer(const delimiters& _del)
+tools::i8n::lexer::lexer(
+	const delimiters& _del
+)
 	:delim(_del) {
 
 }
 
-std::vector<tools::i8n::lexer::token> tools::i8n::lexer::from_file(const std::string& _filepath) const {
+std::vector<tools::i8n::lexer::token> tools::i8n::lexer::from_file(
+	const std::string& _filepath
+) const {
 
 	std::ifstream file(_filepath.c_str());
 	if(!file) {
@@ -276,7 +379,9 @@ std::vector<tools::i8n::lexer::token> tools::i8n::lexer::from_file(const std::st
 	}
 }
 
-std::vector<tools::i8n::lexer::token> tools::i8n::lexer::from_string(const std::string& _raw_text) const {
+std::vector<tools::i8n::lexer::token> tools::i8n::lexer::from_string(
+	const std::string& _raw_text
+) const {
 
 	std::string line;
 	int linenum=0, charnum=0;
@@ -338,7 +443,9 @@ std::vector<tools::i8n::lexer::token> tools::i8n::lexer::from_string(const std::
 	return result;
 }
 
-tools::i8n::lexer::tokentypes tools::i8n::lexer::scan_buffer(const std::string& _control) const {
+tools::i8n::lexer::tokentypes tools::i8n::lexer::scan_buffer(
+	const std::string& _control
+) const {
 
 	assert(2==_control.size());
 
@@ -353,7 +460,9 @@ tools::i8n::lexer::tokentypes tools::i8n::lexer::scan_buffer(const std::string& 
 	return tokentypes::nothing;
 }
 
-std::string tools::i8n::lexer::typetostring(tokentypes _type) {
+std::string tools::i8n::lexer::typetostring(
+	tokentypes _type
+) {
 
 	switch(_type) {
 		case tokentypes::openlabel: return "open label";
@@ -376,13 +485,17 @@ std::string tools::i8n::lexer::typetostring(tokentypes _type) {
 
 //TODO: I don't like how these two parse functions are radically different
 //in how they work internally.
-tools::i8n::codex_entry tools::i8n::parser::parse(const std::vector<lexer::token>& _tokens) const {
+tools::i8n::codex_entry tools::i8n::parser::parse(
+	const std::vector<lexer::token>& _tokens
+) const {
 
 	int curtoken=0, size=_tokens.size();
 	return value_phase(_tokens, curtoken, size);
 }
 
-std::map<std::string, tools::i8n::codex_entry> tools::i8n::parser::parse(const std::map<std::string, std::vector<lexer::token>>& _lexer_tokens) const {
+std::map<std::string, tools::i8n::codex_entry> tools::i8n::parser::parse(
+	const std::map<std::string, std::vector<lexer::token>>& _lexer_tokens
+) const {
 
 	std::map<std::string, codex_entry>	entries;
 
@@ -407,7 +520,9 @@ std::map<std::string, tools::i8n::codex_entry> tools::i8n::parser::parse(const s
 	return solved;
 }
 
-void tools::i8n::parser::compact_entry(codex_entry& _entry) const {
+void tools::i8n::parser::compact_entry(
+	codex_entry& _entry
+) const {
 
 	auto it=std::begin(_entry.segments);
 
@@ -428,7 +543,9 @@ void tools::i8n::parser::compact_entry(codex_entry& _entry) const {
 	}
 }
 
-std::map<std::string, tools::i8n::codex_entry> tools::i8n::parser::compile_entries(std::map<std::string, tools::i8n::codex_entry>& _entries) const {
+std::map<std::string, tools::i8n::codex_entry> tools::i8n::parser::compile_entries(
+	std::map<std::string, tools::i8n::codex_entry>& _entries
+) const {
 
 	std::map<std::string, codex_entry> solved;
 
@@ -467,9 +584,15 @@ std::map<std::string, tools::i8n::codex_entry> tools::i8n::parser::compile_entri
 
 
 #ifdef WITH_DEBUG_CODE
-void tools::i8n::parser::debug(const std::vector<lexer::token>& _tokens, std::ostream& _stream) const {
+void tools::i8n::parser::debug(
+	const std::vector<lexer::token>& _tokens, 
+	std::ostream& _stream
+) const {
 #else
-void tools::i8n::parser::debug(const std::vector<lexer::token>&, std::ostream&) const {
+void tools::i8n::parser::debug(
+	const std::vector<lexer::token>&, 
+	std::ostream&
+) const {
 #endif
 
 #ifdef WITH_DEBUG_CODE
@@ -480,9 +603,15 @@ void tools::i8n::parser::debug(const std::vector<lexer::token>&, std::ostream&) 
 }
 
 #ifdef WITH_DEBUG_CODE
-void tools::i8n::parser::debug(const lexer::token& _token, std::ostream& _stream) const {
+void tools::i8n::parser::debug(
+	const lexer::token& _token, 
+	std::ostream& _stream
+) const {
 #else
-void tools::i8n::parser::debug(const lexer::token&, std::ostream&) const {
+void tools::i8n::parser::debug(
+	const lexer::token&, 
+	std::ostream&
+) const {
 #endif
 
 #ifdef WITH_DEBUG_CODE
@@ -502,9 +631,15 @@ void tools::i8n::parser::debug(const lexer::token&, std::ostream&) const {
 }
 
 #ifdef WITH_DEBUG_CODE
-void tools::i8n::parser::debug(const codex_entry& _entry, std::ostream& _stream) const {
+void tools::i8n::parser::debug(
+	const codex_entry& _entry, 
+	std::ostream& _stream
+) const {
 #else
-void tools::i8n::parser::debug(const codex_entry&, std::ostream&) const {
+void tools::i8n::parser::debug(
+	const codex_entry&, 
+	std::ostream&
+) const {
 #endif
 
 #ifdef WITH_DEBUG_CODE
@@ -515,9 +650,15 @@ void tools::i8n::parser::debug(const codex_entry&, std::ostream&) const {
 }
 
 #ifdef WITH_DEBUG_CODE
-void tools::i8n::parser::debug(const entry_segment& _segment, std::ostream& _stream) const {
+void tools::i8n::parser::debug(
+	const entry_segment& _segment, 
+	std::ostream& _stream
+) const {
 #else
-void tools::i8n::parser::debug(const entry_segment&, std::ostream&) const {
+void tools::i8n::parser::debug(
+	const entry_segment&, 
+	std::ostream&
+) const {
 #endif
 
 #ifdef WITH_DEBUG_CODE
@@ -529,7 +670,9 @@ void tools::i8n::parser::debug(const entry_segment&, std::ostream&) const {
 #endif
 }
 
-void tools::i8n::parser::interpret_tokens(const std::vector<lexer::token>& _tokens, std::map<std::string, codex_entry>& _entries) const {
+void tools::i8n::parser::interpret_tokens(
+	const std::vector<lexer::token>& _tokens, std::map<std::string, codex_entry>& _entries
+) const {
 
 	int curtoken=0,
 		size=_tokens.size()-1;
@@ -547,7 +690,9 @@ void tools::i8n::parser::interpret_tokens(const std::vector<lexer::token>& _toke
 	}
 }
 
-void tools::i8n::parser::check_integrity(const std::map<std::string, codex_entry>& _entries) const {
+void tools::i8n::parser::check_integrity(
+	const std::map<std::string, codex_entry>& _entries
+) const {
 
 	typedef const std::pair<std::string, codex_entry> tpair;
 	size_t total=tools::reduce(std::begin(_entries), std::end(_entries), [](size_t&& _carry, tpair _pair) {return _carry+=_pair.second.segments.size();}, 0);
@@ -567,8 +712,10 @@ void tools::i8n::parser::check_integrity(const std::map<std::string, codex_entry
 	}
 }
 
-
-bool tools::i8n::parser::solve_entry(codex_entry& _entry, std::map<std::string, codex_entry>& _solved) const {
+bool tools::i8n::parser::solve_entry(
+	codex_entry& _entry, 
+	std::map<std::string, codex_entry>& _solved
+) const {
 
 	for(auto it=std::begin(_entry.segments); it != std::end(_entry.segments); it++) {
 
@@ -595,7 +742,11 @@ bool tools::i8n::parser::solve_entry(codex_entry& _entry, std::map<std::string, 
 	return true;
 }
 
-std::string tools::i8n::parser::label_phase(const std::vector<lexer::token>& _tokens, int& _curtoken, const int _size) const {
+std::string tools::i8n::parser::label_phase(
+	const std::vector<lexer::token>& _tokens, 
+	int& _curtoken, 
+	const int _size
+) const {
 
 	//Trim all whitespace tokens before the first opening...
 	_curtoken=find_next_of(_tokens, lexer::tokentypes::openlabel, _curtoken);
@@ -611,7 +762,11 @@ std::string tools::i8n::parser::label_phase(const std::vector<lexer::token>& _to
 	return label;
 }
 
-tools::i8n::codex_entry tools::i8n::parser::value_phase(const std::vector<lexer::token>& _tokens, int& _curtoken, const int _size) const {
+tools::i8n::codex_entry tools::i8n::parser::value_phase(
+	const std::vector<lexer::token>& _tokens, 
+	int& _curtoken, 
+	const int _size
+) const {
 
 	//Store these, we are skipping to the "value open" now and might get to the end of the tokens.
 	int line=_tokens[_curtoken].line,
@@ -663,7 +818,11 @@ tools::i8n::codex_entry tools::i8n::parser::value_phase(const std::vector<lexer:
 	}
 }
 
-std::string tools::i8n::parser::parse_open_close(const std::vector<lexer::token>& _tokens, lexer::tokentypes _closetype, int _curtoken) const {
+std::string tools::i8n::parser::parse_open_close(
+	const std::vector<lexer::token>& _tokens, 
+	lexer::tokentypes _closetype, 
+	int _curtoken
+) const {
 
 	//Skip the opening...
 	++_curtoken;
@@ -691,7 +850,11 @@ std::string tools::i8n::parser::parse_open_close(const std::vector<lexer::token>
 	return result;
 }
 
-int tools::i8n::parser::find_next_of(const std::vector<lexer::token>& _tokens, lexer::tokentypes _type, int _curtoken) const {
+int tools::i8n::parser::find_next_of(
+	const std::vector<lexer::token>& _tokens, 
+	lexer::tokentypes _type, 
+	int _curtoken
+) const {
 
 	int size=_tokens.size()-1;
 	while(_curtoken < size) {
@@ -719,7 +882,9 @@ int tools::i8n::parser::find_next_of(const std::vector<lexer::token>& _tokens, l
 ////////////////////////////////////////////////////////////////////////////////
 // Codex entry.
 
-std::string tools::i8n::codex_entry::get(const std::vector<substitution>& _subs) const {
+std::string tools::i8n::codex_entry::get(
+	const std::vector<substitution>& _subs
+) const {
 
 	std::string result;
 	for(const auto& seg : segments) {
@@ -735,7 +900,10 @@ std::string tools::i8n::codex_entry::get(const std::vector<substitution>& _subs)
 	return result;
 }
 
-std::string tools::i8n::codex_entry::get(const std::vector<substitution>& _subs, const std::vector<substitution>& _base_subs) const {
+std::string tools::i8n::codex_entry::get(
+	const std::vector<substitution>& _subs, 
+	const std::vector<substitution>& _base_subs
+) const {
 
 	std::string result;
 	for(const auto& seg : segments) {
@@ -753,7 +921,11 @@ std::string tools::i8n::codex_entry::get(const std::vector<substitution>& _subs,
 	return result;
 }
 
-bool tools::i8n::codex_entry::substitute(const std::string& _key, const std::vector<substitution>& _subs, std::string& _res) const {
+bool tools::i8n::codex_entry::substitute(
+	const std::string& _key, 
+	const std::vector<substitution>& _subs, 
+	std::string& _res
+) const {
 
 	const auto it=std::find_if(std::begin(_subs), std::end(_subs), [&_key](const substitution& _sub) {
 		return _sub.key==_key;
@@ -770,7 +942,9 @@ bool tools::i8n::codex_entry::substitute(const std::string& _key, const std::vec
 ////////////////////////////////////////////////////////////////////////////////
 // Helpers.
 
-bool tools::i8n::substitution::operator==(const substitution& _o) const {
+bool tools::i8n::substitution::operator==(
+	const substitution& _o
+) const {
 
 	return _o.key==key
 		&& _o.value==value;

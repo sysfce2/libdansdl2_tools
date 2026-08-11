@@ -50,7 +50,11 @@ int arg_manager::find_index_value(const t_arg& val) const {
 	return -1;
 }
 
-std::string arg_manager::get_value(const t_arg& argumento, const char delimiter) const {
+std::string arg_manager::get_value(
+	const t_arg& argumento, 
+	const char delimiter
+) const {
+
 	std::stringstream ss;
 	ss<<argumento<<delimiter;
 	const std::string f_index=ss.str();

@@ -11,6 +11,10 @@ Changes will be documented under Added, Changed, Deprecated, Removed, Fixed or S
 ## Unreleased
 ### Pending
 
+## [v1.1.10]: 2026-08-11
+### Added
+- i8n has now the ability to use files in user-provided directories.
+
 ## [v1.1.9]: 2026-06-12
 ### Changed
 - Makes dump file ignore any kind of newline conversion.
